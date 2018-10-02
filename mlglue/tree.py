@@ -155,6 +155,7 @@ def xgbtree_to_nodetree(tree):
     prev_index = -1
     nodes = {}
 
+    #print 'ED DEBUG do we even get here?'
     for node in tree.split("\n"):
         node_depth = node.count("\t")
 
@@ -201,6 +202,7 @@ def xgbtree_to_nodetree(tree):
 
         prev_depth = node_depth
         prev_index = node_index
+        #print 'ED DEBUG: have made a tree with is_node = %s and is_leaf = %s'%(is_node,is_leaf)
 
     #nodes[0].print_out(nodes)
 
@@ -378,27 +380,38 @@ class BDT(object):
         return ret
 
 class BDTxgboost(BDT):
-    def __init__(self, model, feature_names, target_names):
-        
-        self.model = model
-        kind = None
-        if model.objective.startswith("binary:logistic"):
-            kind = "binary"
-        elif model.objective.startswith("multiclass"):
-            kind = "multiclass"
-        else:
-            kind = "regression"
-        print model.objective, kind
+    def __init__(self, model, feature_names, target_names, kind=None, max_depth=None, learning_rate=None):
+        #print 'ED DEBUG: initiating the xgboost bdt conversion class'
+        if not kind:
+            self.model = model
+            if model.objective.startswith("binary:logistic"):
+                kind = "binary"
+            elif model.objective.startswith("multiclass"):
+                kind = "multiclass"
+            else:
+                kind = "regression"
+            print model.objective, kind
+       
+        if not max_depth:
+            max_depth = model.max_depth
+
+        if not learning_rate:
+            max_depth = model.learning_rate
 
         trees = []
-        for tree_dump in model.booster().get_dump():
+        try: 
+            full_dump = model.booster().get_dump()
+        except AttributeError:
+            full_dump = model.get_dump()
+          
+        for tree_dump in full_dump:
             tree = xgbtree_to_nodetree(tree_dump)
             trees += [tree]
 
-        super(BDTxgboost, self).__init__(trees, kind, feature_names, target_names, model.max_depth, model.learning_rate)
+        super(BDTxgboost, self).__init__(trees, kind, feature_names, target_names, max_depth, learning_rate)
 
     def eval(self, features):
-        proba = self.model.predict_proba(features)[:, 1]
+        proba = self.model.predict(features)[:, 1]
 
         #invert sigmoid
         proba = -np.log(1.0/proba - 1.0)
